@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Runtime.Serialization;
 
 
-enum VehicleType
+public enum VehicleType
 {
     Car,
     Bike,
@@ -17,8 +17,6 @@ public abstract class ParkingSpot
     public int SpotId { get; private set;}
     public bool IsAvailable { get; private set;}
     public double Price { get; protected set;}
-
-    public VehicleType CanFitVehicleType { get; protected set; }
 
     public ParkingSpot(int spotId)
     {
@@ -34,7 +32,8 @@ public abstract class ParkingSpot
         IsAvailable = true;
     }
     public abstract void SetPrice();
-    public abstract bool CanFitVehicle(Vehicle vehicle);
+    public abstract bool CanFitVehicle(Vehicle vehicle); 
+
 }
 class SmallSpot : ParkingSpot
 {
@@ -45,8 +44,7 @@ class SmallSpot : ParkingSpot
     }
     public override bool CanFitVehicle(Vehicle vehicle)
     {
-        CanFitVehicleType = vehicle.VehicleType;
-        return IsAvailable && vehicle.VehicleType == VehicleType.Bike;
+        return vehicle.VehicleType == VehicleType.Bike;
     }
 
 }
@@ -59,8 +57,7 @@ class MediumSpot : ParkingSpot
     }
     public override bool CanFitVehicle(Vehicle vehicle)
     {
-        CanFitVehicleType = vehicle.VehicleType;
-        return IsAvailable && vehicle.VehicleType == VehicleType.Car;
+        return vehicle.VehicleType == VehicleType.Car;
     }
 }
 class LargeSpot : ParkingSpot
@@ -72,12 +69,11 @@ class LargeSpot : ParkingSpot
     }
     public override bool CanFitVehicle(Vehicle vehicle)
     {
-        CanFitVehicleType = vehicle.VehicleType;
-        return IsAvailable && vehicle.VehicleType == VehicleType.Truck;
+        return vehicle.VehicleType == VehicleType.Truck;
     }
 }
 
-abstract class Vehicle
+public abstract class Vehicle
 {
     public string VehicleNumber { get; private set; }
     public VehicleType VehicleType { get; private set;}
@@ -106,16 +102,22 @@ class ParkingTicket
     public DateTime ParkedTime{ get; private set; }
     public ParkingSpot ParkingSpot { get; private set; }
     public bool Paid { get; private set; }
+    public bool IsValid { get; private set; }  // New flag for ticket validity
+
     public ParkingTicket(ParkingSpot parkingSpot)
     {
         ParkingSpot = parkingSpot;
         ParkedTime = DateTime.Now;
         Paid = false;
-
+        IsValid = true;
     }
     public void MarkAsPaid()
     {
         Paid = true;
+    }
+    public void InvalidateTicket()  // Method to invalidate the ticket
+    {
+        IsValid = false;
     }
     public double GetParkedTime() //for now in seconds
     {
@@ -129,25 +131,25 @@ class ParkingLot
     public ParkingLot(int smallSpots, int mediumSpots, int largeSpots)
     {
         parkingSpots = new List<ParkingSpot>();
-
+        int parkingSpotCount = 0;
         for (int i = 0; i < smallSpots; i++)
         {
-            parkingSpots.Add(new SmallSpot(i));
+            parkingSpots.Add(new SmallSpot(parkingSpotCount++));
         }
         for (int i = 0; i < mediumSpots; i++)
         {
-            parkingSpots.Add(new MediumSpot(i));
+            parkingSpots.Add(new MediumSpot(parkingSpotCount++));
         }
         for (int i = 0; i < largeSpots; i++)
         {
-            parkingSpots.Add(new LargeSpot(i));
+            parkingSpots.Add(new LargeSpot(parkingSpotCount++));
         }
     }
-    public ParkingSpot FindAvailableSpot(VehicleType vehicleType)
+    public ParkingSpot FindAvailableSpot(Vehicle vehicle)
     {
         foreach (var parkingSpot in parkingSpots)
         {
-            if (parkingSpot.CanFitVehicle(vehicleType))
+            if (parkingSpot.IsAvailable && parkingSpot.CanFitVehicle(vehicle))
             {
                 return parkingSpot;
             }
@@ -160,9 +162,11 @@ class ParkingLot
     }
     public void CheckSpotsStatus()
     {
+        Console.WriteLine("---------------------");
         foreach (var parkingSpot in parkingSpots)
         {
-            Console.WriteLine($"Is Available: {parkingSpot.IsAvailable}, Vehicle Type: {parkingSpot.CanFitVehicleType}");
+            string spotType = parkingSpot.GetType().Name;
+            Console.WriteLine($"Spot ID: {parkingSpot.SpotId}, Status: {(parkingSpot.IsAvailable ? "Available" : "Occupied")}, Spot Type: {spotType}");
         }
     }
 }
@@ -172,19 +176,33 @@ class ParkingAttendant
 {
     public ParkingTicket BookSpot(ParkingLot parkingLot, Vehicle vehicle)
     {
-        var parkingSpot = parkingLot.FindAvailableSpot(vehicle.VehicleType);
-        if (parkingSpot != null)
+        var parkingSpot = parkingLot.FindAvailableSpot(vehicle);
+        if (parkingSpot == null)
         {
-            parkingSpot.BookSpot();
-            ParkingTicket parkingTicket = new ParkingTicket(parkingSpot);
-            return parkingTicket;
+            Console.WriteLine($"No available spot for vehicle {vehicle.VehicleNumber} of type {vehicle.VehicleType}.");
+            return null;
         }
-        return null;
+        parkingSpot.BookSpot();
+        ParkingTicket parkingTicket = new ParkingTicket(parkingSpot);
+        Console.WriteLine($"Spot {parkingSpot.SpotId} booked for vehicle {vehicle.VehicleNumber} of type {vehicle.VehicleType}.");
+        return parkingTicket;
     }
     public void GenerateBill(ParkingTicket parkingTicket)
     {
+        if (parkingTicket == null)
+        {
+            Console.WriteLine("Invalid ticket. Cannot generate a bill.");
+            return;
+        }
+        if(!parkingTicket.IsValid)
+        {
+            Console.WriteLine("This ticket is already invalid. Bill has been generated.");
+            return;
+        }
         parkingTicket.MarkAsPaid();
+        parkingTicket.InvalidateTicket();
         parkingTicket.ParkingSpot.LeaveSpot();
+        Console.WriteLine($"Spot {parkingTicket.ParkingSpot.SpotId} has been left.");
         Console.WriteLine($" Bill of $ {parkingTicket.ParkingSpot.Price * parkingTicket.GetParkedTime()}");
     }
 }
@@ -195,9 +213,10 @@ public class Program
     {
         
 
-        Console.WriteLine($"Hello World {VehicleType.Bike} {small.Price}");
+        Console.WriteLine($"Hello World {VehicleType.Bike} ");
 
-        ParkingLot parkingLot= new ParkingLot(5,5,5);
+        ParkingLot parkingLot= new ParkingLot(2,2,2);
+        parkingLot.CheckSpotsStatus();
         ParkingAttendant parkingAttendant = new ParkingAttendant();
 
         Vehicle car1 = new Car("CAR123");
@@ -219,9 +238,8 @@ public class Program
         parkingAttendant.GenerateBill(ticket1);
         parkingAttendant.GenerateBill(ticket3);
         parkingLot.CheckSpotsStatus();
-        parkingAttendant.GenerateBill(ticket3);
-
-
+        parkingAttendant.GenerateBill(ticket2);
+        parkingAttendant.GenerateBill(ticket2);
 
     }
 }
