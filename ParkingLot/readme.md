@@ -4,7 +4,7 @@ The parking lot system is designed to manage parking spaces for different types 
 
 ## Class Diagram
 
-![Class Diagram](@class-diagram.png)
+![Class Diagram](https://github.com/avinasshkummar/interview-prep/raw/master/ParkingLot/class-diagram.png)
 
 ## Key Components
 
